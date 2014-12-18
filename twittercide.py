@@ -1,11 +1,8 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentParser
-from email.encoders import encode_noop
-from email.mime.application import MIMEApplication
-from email.mime.image import MIMEImage
-from email.mime.multipart import MIMEMultipart
 import json
+from base64 import b64encode
 
 from requests import Request, Session
 from requests_foauth import Foauth
@@ -25,30 +22,16 @@ session.mount('https://', Foauth(args.email, args.password))
 
 def _prepare_upload(title, file_):
     '''Prepares a Request to upload the file <file_>, giving it the title <title>.'''
-    # http://stackoverflow.com/questions/15746558/how-to-send-a-multipart-related-with-requests-in-python
-
-    message = MIMEMultipart('related')
-
-    image = MIMEImage(file_.read())
-
     metadata = {
         'title': title,
     }
-    metadata = json.dumps(metadata)
-    metadata = MIMEApplication(metadata, 'json', encode_noop)
 
-    message.attach(metadata)
-    message.attach(image)
-
-    body = message.as_string()
-    headers = dict(message.items())
-
-    request = Request(
-        'post',
-        'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart',
-        data=body,
-        headers=headers
-    )
+    request = Request('post', 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files={
+        'metadata': json.dumps(metadata),
+        'file': b64encode(file_.read()),
+    }, headers={
+        'Content-Type': '',  # Hack to make Google Drive's API work
+    })
 
     return request
 
