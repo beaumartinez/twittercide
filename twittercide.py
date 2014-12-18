@@ -2,10 +2,17 @@
 
 from argparse import ArgumentParser
 import json
+import logging
 from base64 import b64encode
 
 from requests import Request, Session
 from requests_foauth import Foauth
+
+
+logging.basicConfig()
+
+log = logging.getLogger(__name__)
+log.setLevel(logging.DEBUG)
 
 
 parser = ArgumentParser(description='Delete your last 3200 tweets and backup tweeted photos to Google Drive')
@@ -45,4 +52,8 @@ if __name__ == '__main__':
     request = session.prepare_request(request)
     response = session.send(request)
 
+    log.debug('Request headers {}'.format(response.request.headers))
+    log.debug('Request body {}'.format(response.request.body))
     response.raise_for_status()
+
+    log.debug('Response body {}'.format(response.text))
