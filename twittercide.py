@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
 from argparse import ArgumentParser
+from base64 import b64encode
+from collections import OrderedDict
 import json
 import logging
-from base64 import b64encode
 
 from requests import Request, Session
 from requests_foauth import Foauth
@@ -27,18 +28,21 @@ session = Session()
 session.mount('https://', Foauth(args.email, args.password))
 
 
-def _prepare_upload(title, file_):
+def _prepare_upload(session, title, file_):
     '''Prepares a Request to upload the file <file_>, giving it the title <title>.'''
     metadata = {
         'title': title,
     }
 
-    request = Request('post', 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files={
-        'metadata': json.dumps(metadata),
-        'file': b64encode(file_.read()),
-    }, headers={
-        'Content-Type': '',  # Hack to make Google Drive's API work
-    })
+    files = OrderedDict()
+    files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
+    files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
+
+    request = Request('post', 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files=files)
+
+    # requests sets the content-type as multipart/form-data, Google Drive expects multipart/related
+    request = session.prepare_request(request)
+    request.headers['Content-Type'] = request.headers['Content-Type'].replace('form-data', 'related')
 
     return request
 
@@ -47,9 +51,8 @@ if __name__ == '__main__':
     # TODO: Search first
 
     with open('/Users/beau/Pictures/1418760457552.png', mode='rb') as file_:
-        request = _prepare_upload('lel.png', file_)
+        request = _prepare_upload(session, 'lel.png', file_)
 
-    request = session.prepare_request(request)
     response = session.send(request)
 
     log.debug('Request headers {}'.format(response.request.headers))
