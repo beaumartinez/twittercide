@@ -29,7 +29,16 @@ session.mount('https://', Foauth(args.email, args.password))
 
 
 def _prepare_upload(session, title, file_):
-    '''Prepares a Request to upload the file <file_>, giving it the title <title>.'''
+    '''Prepares a Request to upload the file <file_>, giving it the title
+    <title>, using an existing session <session>.
+
+    '''
+    # Google Drive expects multipart/related, and for the fields to be in a
+    # particular order. First, the metadata, then the file.
+    #
+    # It expects the metadata as application/json, and the file as base64 (with
+    # Content-Transfer-Encoding: base64).
+
     metadata = {
         'title': title,
     }
@@ -39,9 +48,11 @@ def _prepare_upload(session, title, file_):
     files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
 
     request = Request('post', 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files=files)
-
-    # requests sets the content-type as multipart/form-data, Google Drive expects multipart/related
     request = session.prepare_request(request)
+
+    # This is a bit ugly (ideally requests would expose a way to set the
+    # boundary explictly), but it is the simplest way that doesn't require any
+    # external libraries.
     request.headers['Content-Type'] = request.headers['Content-Type'].replace('form-data', 'related')
 
     return request
