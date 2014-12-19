@@ -15,7 +15,7 @@ from requests_foauth import Foauth
 logging.basicConfig()
 
 log = logging.getLogger(__name__)
-log.setLevel(logging.DEBUG)
+log.setLevel(logging.INFO)
 
 
 parser = ArgumentParser(description='Delete your last 3200 tweets and backup tweeted photos to Google Drive')
@@ -24,6 +24,10 @@ parser.add_argument('password', help='foauth.org password')
 parser.add_argument('--debug', action='store_true')
 
 args = parser.parse_args()
+
+
+if args.debug:
+    log.setLevel(logging.DEBUG)
 
 
 class Twittercider(object):
@@ -76,7 +80,7 @@ class Twittercider(object):
         response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
             'q': query,
         })
-        log.debug('_get_or_upload: get response {}'.format(response.text))
+        log.debug('_get_or_upload: query response {}'.format(response.text))
 
         response_data = response.json()
         results = response_data['items']
@@ -84,7 +88,7 @@ class Twittercider(object):
         try:
             result = results[0]
         except IndexError:
-            log.debug('_get_or_upload: get not found. Uploading.'.format(response.text))
+            log.debug('_get_or_upload: not found. Uploading.'.format(response.text))
 
             # Google Drive expects multipart/related, and for the fields to be in a
             # particular order. First, the metadata, then the file.
@@ -126,6 +130,8 @@ class Twittercider(object):
         file_ = StringIO(file_)
 
         self._get_or_upload(metadata, file_)
+
+        log.info('Backed up {}'.format(url))
 
     def _backup_tweets(self):
         response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
