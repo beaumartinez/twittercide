@@ -3,7 +3,6 @@
 from argparse import ArgumentParser
 from base64 import b64encode
 from collections import OrderedDict
-from urllib import quote_plus
 import json
 import logging
 
@@ -25,88 +24,88 @@ parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
 
-session = Session()
-session.mount('https://', Foauth(args.email, args.password))
+class Twittercider(object):
 
+    def __init__(self):
+        self.session = Session()
+        self.session.mount('https://', Foauth(args.email, args.password))
 
-def _prepare_upload(session, parent_dir, title, file_):
-    '''Prepares a Request to upload the file <file_>, giving it the title
-    <title>, using an existing session <session>.
+        self._get_or_create_parent_dir()
 
-    '''
-    # Google Drive expects multipart/related, and for the fields to be in a
-    # particular order. First, the metadata, then the file.
-    #
-    # It expects the metadata as application/json, and the file as base64 (with
-    # Content-Transfer-Encoding: base64).
+    def _prepare_post_multipart_related(self, url, files):
+        request = Request('post', url, files=files)
+        request = self.session.prepare_request(request)
 
-    metadata = {
-        'title': title,
-        'parents': (parent_dir,)
-    }
+        # This is a bit ugly (ideally requests would expose a way to set the
+        # boundary explictly), but it is the simplest way that doesn't require any
+        # external libraries.
+        request.headers['Content-Type'] = request.headers['Content-Type'].replace('form-data', 'related')
 
-    files = OrderedDict()
-    files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
-    files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
+        return request
 
-    request = _prepare_post_multipart_related('https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files)
+    def _prepare_upload(self, title, file_):
+        '''Prepares a Request to upload the file <file_>, giving it the title
+        <title>.
 
-    return request
+        '''
+        # Google Drive expects multipart/related, and for the fields to be in a
+        # particular order. First, the metadata, then the file.
+        #
+        # It expects the metadata as application/json, and the file as base64 (with
+        # Content-Transfer-Encoding: base64).
 
-
-def _prepare_post_multipart_related(url, files):
-    request = Request('post', url, files=files)
-    request = session.prepare_request(request)
-
-    # This is a bit ugly (ideally requests would expose a way to set the
-    # boundary explictly), but it is the simplest way that doesn't require any
-    # external libraries.
-    request.headers['Content-Type'] = request.headers['Content-Type'].replace('form-data', 'related')
-
-    return request
-
-
-def _get_or_create_parent_dir(session):
-    query = 'title = "Twittercide" and mimeType = "application/vnd.google-apps.folder"'
-
-    response = session.get('https://www.googleapis.com/drive/v2/files', params={
-        'q': query,
-    })
-
-    log.debug('Parent dir search response {}'.format(response.text))
-
-    response_data = response.json()
-    results = response_data['items']
-
-    try:
-        parent_dir = results[0]
-    except IndexError:
         metadata = {
-            'title': 'Twittercide',
-            'mimeType': 'application/vnd.google-apps.folder',
+            'title': title,
+            'parents': (self.parent_dir,)
         }
 
         files = OrderedDict()
         files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
+        files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
 
-        request = _prepare_post_multipart_related('https://www.googleapis.com/upload/drive/v2/files', files)
-        response = session.send(request)
+        request = self._prepare_post_multipart_related('https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart', files)
 
-        log.debug('Parent dir create response {}'.format(response.text))
+        return request
+
+    def _get_or_create_parent_dir(self):
+        query = 'title = "Twittercide" and mimeType = "application/vnd.google-apps.folder"'
+
+        response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
+            'q': query,
+        })
+
+        log.debug('Parent dir search response {}'.format(response.text))
 
         response_data = response.json()
-        parent_dir = response_data
+        results = response_data['items']
 
-    return parent_dir
+        try:
+            self.parent_dir = results[0]
+        except IndexError:
+            metadata = {
+                'title': 'Twittercide',
+                'mimeType': 'application/vnd.google-apps.folder',
+            }
+
+            files = OrderedDict()
+            files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
+
+            request = self._prepare_post_multipart_related('https://www.googleapis.com/upload/drive/v2/files', files)
+            response = self.session.send(request)
+
+            log.debug('Parent dir create response {}'.format(response.text))
+
+            response_data = response.json()
+            self.parent_dir = response_data
 
 
 if __name__ == '__main__':
-    parent_dir = _get_or_create_parent_dir()
+    api = Twittercider()
 
     with open('/Users/beau/Pictures/1418760457552.png', mode='rb') as file_:
-        request = _prepare_upload(session, parent_dir, 'lel.png', file_)
+        request = api._prepare_upload('lel.png', file_)
 
-    response = session.send(request)
+    response = api.session.send(request)
 
     log.debug('Request headers {}'.format(response.request.headers))
     log.debug('Request body {}'.format(response.request.body))
