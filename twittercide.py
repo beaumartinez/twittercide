@@ -8,8 +8,10 @@ from os.path import basename
 import json
 import logging
 
+from arrow import utcnow
 from requests import Request, Session
 from requests_foauth import Foauth
+import dateutil.parser
 
 
 logging.basicConfig()
@@ -48,6 +50,8 @@ class Twittercider(object):
 
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
+
+        self.now = utcnow()
 
     def _get_or_create_parent_dir(self):
         metadata = {
@@ -166,7 +170,17 @@ class Twittercider(object):
             if 'extended_entities' in tweet:
                 if 'media' in tweet['extended_entities']:
                     for media in tweet['extended_entities']['media']:
-                        self._backup_twitter_media(media['media_url'])
+                        created_at = tweet['created_at']
+                        created_at = dateutil.parser.parse(created_at)
+
+                        delta = self.now - created_at
+
+                        if delta.days >= self.days_ago:
+                            self._backup_twitter_media(media['media_url'])
+                        else:
+                            log.debug('Tweet not old enough ({} days old, must be at least {}). Skipping'.format(delta.days, self.days_ago))
+
+        max_id = tweet['id_str']
 
     def twittercide(self):
         self._get_or_create_parent_dir()
