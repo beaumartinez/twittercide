@@ -32,8 +32,6 @@ class Twittercider(object):
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
 
-        self._get_or_create_parent_dir()
-
     def _get_or_create_parent_dir(self):
         metadata = {
             'title': 'Twittercide',
@@ -129,7 +127,7 @@ class Twittercider(object):
 
         self._get_or_upload(metadata, file_)
 
-    def _get_tweets(self):
+    def _backup_tweets(self):
         response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
             'count': 200,
             'include_rts': False,
@@ -143,7 +141,11 @@ class Twittercider(object):
                     for media in tweet['extended_entities']['media']:
                         self._backup_twitter_media(media['media_url'])
 
+    def twittercide(self):
+        self._get_or_create_parent_dir()
+        self._backup_tweets()
+
 
 if __name__ == '__main__':
-    api = Twittercider()
-    api._get_tweets()
+    t = Twittercider()
+    t.twittercide()
