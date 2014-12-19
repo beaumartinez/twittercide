@@ -2,7 +2,9 @@
 
 from argparse import ArgumentParser
 from base64 import b64encode
+from cStringIO import StringIO
 from collections import OrderedDict
+from os.path import basename
 import json
 import logging
 
@@ -68,6 +70,8 @@ class Twittercider(object):
         return request
 
     def _get_or_create_parent_dir(self):
+        # TODO: Convert this to a generic get_or_create
+
         query = 'title = "Twittercide" and mimeType = "application/vnd.google-apps.folder"'
 
         response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
@@ -98,17 +102,38 @@ class Twittercider(object):
             response_data = response.json()
             self.parent_dir = response_data
 
+    def _upload(self, url):
+        title = basename(url)
+
+        file_response = self.session.get(url)
+
+        file_ = file_response.content
+        file_ = StringIO(file_)
+
+        upload_request = self._prepare_upload(title, file_)
+        upload_response = self.session.send(upload_request)
+
+        log.debug('Upload request headers {}'.format(upload_response.request.headers))
+        log.debug('Upload request body {}'.format(upload_response.request.body))
+        log.debug('Upload response body {}'.format(upload_response.text))
+
+        upload_response.raise_for_status()
+
+    def _get_tweets(self):
+        response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
+            'count': 200,
+            'include_rts': False,
+        })
+
+        results = response.json()
+
+        for tweet in results:
+            if 'extended_entities' in tweet:
+                if 'media' in tweet['extended_entities']:
+                    for media in tweet['extended_entities']['media']:
+                        self._upload(media['media_url'])
+
 
 if __name__ == '__main__':
     api = Twittercider()
-
-    with open('/Users/beau/Pictures/1418760457552.png', mode='rb') as file_:
-        request = api._prepare_upload('lel.png', file_)
-
-    response = api.session.send(request)
-
-    log.debug('Request headers {}'.format(response.request.headers))
-    log.debug('Request body {}'.format(response.request.body))
-    response.raise_for_status()
-
-    log.debug('Response body {}'.format(response.text))
+    api._get_tweets()
