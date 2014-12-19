@@ -92,13 +92,13 @@ class Twittercider(object):
 
     def _get_or_upload(self, metadata, file_=None):
         query = self._prepare_query(metadata)
-        log.debug('_get_or_upload: query {}'.format(query))
+        log.debug('Query {}'.format(query))
 
         response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
             'q': query,
         })
 
-        log.debug('_get_or_upload: query response {}'.format(response.text))
+        log.debug('Query response {}'.format(response.text))
 
         response.raise_for_status()
 
@@ -108,7 +108,7 @@ class Twittercider(object):
         try:
             result = results[0]
         except IndexError:
-            log.debug('_get_or_upload: not found. Uploading.')
+            log.debug('File not found in Google Drive. Uploading')
 
             # Google Drive expects multipart/related, and for the fields to be in a
             # particular order. First, the metadata, then the file.
@@ -128,7 +128,7 @@ class Twittercider(object):
             request = self._prepare_upload(url, files)
             response = self.session.send(request)
 
-            log.debug('_get_or_upload: upload response {}'.format(response.text))
+            log.debug('Upload response {}'.format(response.text))
 
             response.raise_for_status()
 
