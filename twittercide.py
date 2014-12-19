@@ -58,7 +58,7 @@ class Twittercider(object):
 
         metadata = {
             'title': title,
-            'parents': (self.parent_dir,)
+            'parents': (self.parent_dir_id,)
         }
 
         files = OrderedDict()
@@ -70,37 +70,62 @@ class Twittercider(object):
         return request
 
     def _get_or_create_parent_dir(self):
-        # TODO: Convert this to a generic get_or_create
+        metadata = {
+            'title': 'Twittercide',
+            'mimeType': 'application/vnd.google-apps.folder',
+        }
+        self.parent_dir = self._get_or_upload(metadata)
+        self.parent_dir_id = self.parent_dir['id']
 
-        query = 'title = "Twittercide" and mimeType = "application/vnd.google-apps.folder"'
+    def _get_or_upload(self, metadata, file_=None):
+        query = list()
+
+        for key, value in metadata.iteritems():
+            if key in ('parents',):
+                for subvalue in value:
+                    # When in the metadata, each parent item is object. To search, we just need the ID
+                    subvalue = subvalue['id']
+
+                    query.append('"{}" in {}'.format(subvalue, key))
+            else:
+                query.append('{} = "{}"'.format(key, value))
+
+        query = ' and '.join(query)
+
+        log.debug('_get_or_upload query {}'.format(query))
 
         response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
             'q': query,
         })
 
-        log.debug('Parent dir search response {}'.format(response.text))
+        log.debug('_get_or_upload get response {}'.format(response.text))
 
         response_data = response.json()
         results = response_data['items']
 
         try:
-            self.parent_dir = results[0]
+            result = results[0]
         except IndexError:
-            metadata = {
-                'title': 'Twittercide',
-                'mimeType': 'application/vnd.google-apps.folder',
-            }
+            log.debug('_get_or_upload get not found. Uploading.'.format(response.text))
 
             files = OrderedDict()
             files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
 
-            request = self._prepare_post_multipart_related('https://www.googleapis.com/upload/drive/v2/files', files)
+            url = 'https://www.googleapis.com/upload/drive/v2/files'
+
+            if file_:
+                files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
+                url = 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart'
+
+            request = self._prepare_post_multipart_related(url, files)
             response = self.session.send(request)
 
-            log.debug('Parent dir create response {}'.format(response.text))
+            log.debug('_get_or_upload upload response {}'.format(response.text))
 
             response_data = response.json()
-            self.parent_dir = response_data
+            result = response_data
+
+        return result
 
     def _upload(self, url):
         title = basename(url)
@@ -110,14 +135,11 @@ class Twittercider(object):
         file_ = file_response.content
         file_ = StringIO(file_)
 
-        upload_request = self._prepare_upload(title, file_)
-        upload_response = self.session.send(upload_request)
-
-        log.debug('Upload request headers {}'.format(upload_response.request.headers))
-        log.debug('Upload request body {}'.format(upload_response.request.body))
-        log.debug('Upload response body {}'.format(upload_response.text))
-
-        upload_response.raise_for_status()
+        metadata = {
+            'title': title,
+            'parents': (self.parent_dir,)
+        }
+        self._get_or_upload(metadata, file_)
 
     def _get_tweets(self):
         response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
