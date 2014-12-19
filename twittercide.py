@@ -18,10 +18,20 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-parser = ArgumentParser(description='Delete your last 3200 tweets and backup tweeted photos to Google Drive')
+parser = ArgumentParser(
+    description='Delete your last 3200 tweets and backup tweeted photos to Google Drive',
+    epilog='''Twittercide uses foauth.org <http://foauth.org/> to authenticate with Twitter and Google's APIs.
+    
+    In order to use it, you'll need to sign up with foauth.org, and authorize both those services <https://foauth.org/services/>.
+    
+    For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
+    '''
+)
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--debug', action='store_true')
+parser.add_argument('--days_ago', '-d', default=0, help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
+parser.add_argument('--dry-run', action='store_true', help="don't delete any tweets, but backup tweeted photos")
+parser.add_argument('--debug', '-v', action='store_true', help='show debug logging')
 
 args = parser.parse_args()
 
@@ -32,7 +42,10 @@ if args.debug:
 
 class Twittercider(object):
 
-    def __init__(self):
+    def __init__(self, args):
+        self.days_ago = args.days_ago
+        self.dry_run = args.dry_run
+
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
 
@@ -161,5 +174,5 @@ class Twittercider(object):
 
 
 if __name__ == '__main__':
-    t = Twittercider()
+    t = Twittercider(args)
     t.twittercide()
