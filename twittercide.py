@@ -167,18 +167,23 @@ class Twittercider(object):
         results = response.json()
 
         for tweet in results:
-            if 'extended_entities' in tweet:
-                if 'media' in tweet['extended_entities']:
-                    for media in tweet['extended_entities']['media']:
-                        created_at = tweet['created_at']
-                        created_at = dateutil.parser.parse(created_at)
+            created_at = tweet['created_at']
+            created_at = dateutil.parser.parse(created_at)
 
-                        delta = self.now - created_at
+            delta = self.now - created_at
 
-                        if delta.days >= self.days_ago:
+            if delta.days >= self.days_ago:
+                if 'extended_entities' in tweet:
+                    if 'media' in tweet['extended_entities']:
+                        for media in tweet['extended_entities']['media']:
                             self._backup_twitter_media(media['media_url'])
-                        else:
-                            log.debug('Tweet not old enough ({} days old, must be at least {}). Skipping'.format(delta.days, self.days_ago))
+
+                if not self.dry_run:
+                    log.info('Pretending to delete {}'.format(tweet['id_str']))
+
+                    # self.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str'])
+            else:
+                log.debug('Tweet not old enough ({} days old, must be at least {}). Skipping'.format(delta.days, self.days_ago))
 
         max_id = tweet['id_str']
 
