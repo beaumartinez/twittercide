@@ -24,9 +24,9 @@ log.setLevel(logging.INFO)
 parser = ArgumentParser(
     description='Delete your last 3200 tweets and backup tweeted photos to Google Drive',
     epilog='''Twittercide uses foauth.org <http://foauth.org/> to authenticate with Twitter and Google's APIs.
-    
+
     In order to use it, you'll need to sign up with foauth.org, and authorize both those services <https://foauth.org/services/>.
-    
+
     For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
     '''
 )
@@ -151,7 +151,7 @@ class Twittercider(object):
                 params = {
                     'uploadType': 'multipart',
                 }
-                
+
                 # TODO: Determine mimetype
                 files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
             else:
@@ -238,6 +238,8 @@ class Twittercider(object):
     def twittercide(self):
         self._get_or_create_parent_dir()
         self._backup_tweets()
+
+        log.info('Finished')
 
 
 if __name__ == '__main__':
