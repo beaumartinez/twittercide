@@ -84,7 +84,7 @@ class Twittercider(object):
                     subvalue = subvalue['id']
 
                     query.append('"{}" in {}'.format(subvalue, key))
-            elif key == 'description':
+            elif key in ('description', 'modifiedDate'):
                 pass
             else:
                 query.append('{} = "{}"'.format(key, value))
@@ -108,6 +108,10 @@ class Twittercider(object):
         response_data = response.json()
         results = response_data['items']
 
+        if file_:
+            checksum = md5(file_.getvalue())
+            checksum = checksum.hexdigest()
+
         insert = False
         update = False
 
@@ -122,9 +126,6 @@ class Twittercider(object):
                 raise ValueError('More than 1 matching file {}'.format(len(results)))
 
             if file_:
-                checksum = md5(file_.getvalue())
-                checksum = checksum.hexdigest()
-
                 if result['md5Checksum'] != checksum:
                     update = True
 
@@ -149,15 +150,16 @@ class Twittercider(object):
             files = OrderedDict()
             files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
 
+            params = {
+                'setModifiedDate': True,
+                'newRevision': False,
+            }
+
             if file_:
-                params = {
-                    'uploadType': 'multipart',
-                }
+                params['uploadType'] = 'multipart',
 
                 # TODO: Determine mimetype
                 files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
-            else:
-                params = {}
 
             request = self._prepare_upload(method, url, params, files)
             response = self.session.send(request)
@@ -169,17 +171,22 @@ class Twittercider(object):
             response_data = response.json()
             result = response_data
 
-            if update:
-                if result['md5Checksum'] != checksum:
-                    raise ValueError('MD5 checksums still differ after re-upload. File: {}, Google Drive: {}'.format(checksum, result['md5Checksum']))
+        if file_:
+            if result['md5Checksum'] != checksum:
+                raise ValueError('MD5 checksums differ after upload. File: {}, Google Drive: {}'.format(checksum, result['md5Checksum']))
 
         return result
 
-    def _backup_twitter_media(self, url, tweet_text):
+    def _backup_twitter_media(self, url, tweet):
         title = basename(url)
+
+        date = dateutil.parser.parse(tweet['created_at'])
+        date = date.strftime('%Y-%m-%dT%H:%M:%S.%f%z')  # Explicitly encoding the time. isoformat doesn't work; Google Drive expects microseconds separated by a .
+
         metadata = {
             'title': title,
-            'description': tweet_text,
+            'description': tweet['text'],
+            'modifiedDate': date,
             'parents': ({
                 'kind': 'drive#file',
                 'id': self.parent_dir_id,
@@ -194,9 +201,9 @@ class Twittercider(object):
         file_ = file_response.content
         file_ = StringIO(file_)
 
-        self._get_or_upload(metadata, file_)
+        upload = self._get_or_upload(metadata, file_)
 
-        log.info('Backed up {}'.format(url))
+        log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
 
     def _backup_tweets(self):
         finished = False
@@ -224,7 +231,7 @@ class Twittercider(object):
                     if 'extended_entities' in tweet:
                         if 'media' in tweet['extended_entities']:
                             for media in tweet['extended_entities']['media']:
-                                self._backup_twitter_media(media['media_url'], tweet['text'])
+                                self._backup_twitter_media(media['media_url'], tweet)
 
                     if not self.dry_run:
                         log.info('Pretending to delete {}'.format(tweet['id_str']))
