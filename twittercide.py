@@ -84,6 +84,8 @@ class Twittercider(object):
                     subvalue = subvalue['id']
 
                     query.append('"{}" in {}'.format(subvalue, key))
+            elif key == 'description':
+                pass
             else:
                 query.append('{} = "{}"'.format(key, value))
 
@@ -99,7 +101,7 @@ class Twittercider(object):
             'q': query,
         })
 
-        log.debug('Query response {}'.format(response.text))
+        log.debug('Query response {}'.format(response.text.encode('utf-8')))
 
         response.raise_for_status()
 
@@ -160,7 +162,7 @@ class Twittercider(object):
             request = self._prepare_upload(method, url, params, files)
             response = self.session.send(request)
 
-            log.debug('Upload response {}'.format(response.text))
+            log.debug('Upload response {}'.format(response.text.encode('utf-8')))
 
             response.raise_for_status()
 
@@ -173,10 +175,11 @@ class Twittercider(object):
 
         return result
 
-    def _backup_twitter_media(self, url):
+    def _backup_twitter_media(self, url, tweet_text):
         title = basename(url)
         metadata = {
             'title': title,
+            'description': tweet_text,
             'parents': ({
                 'kind': 'drive#file',
                 'id': self.parent_dir_id,
@@ -221,7 +224,7 @@ class Twittercider(object):
                     if 'extended_entities' in tweet:
                         if 'media' in tweet['extended_entities']:
                             for media in tweet['extended_entities']['media']:
-                                self._backup_twitter_media(media['media_url'])
+                                self._backup_twitter_media(media['media_url'], tweet['text'])
 
                     if not self.dry_run:
                         log.info('Pretending to delete {}'.format(tweet['id_str']))
