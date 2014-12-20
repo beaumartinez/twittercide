@@ -5,6 +5,7 @@ from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
 from hashlib import md5
+from pprint import pformat
 from os.path import basename
 import json
 import logging
@@ -32,24 +33,16 @@ parser = ArgumentParser(
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--days_ago', '-d', default=0, help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
+parser.add_argument('--days_ago', '-d', help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
 parser.add_argument('--dry-run', action='store_true', help="don't delete any tweets, but backup tweeted photos")
 parser.add_argument('--debug', '-v', action='store_true', help='show debug logging')
-
-args = parser.parse_args()
-
-
-if args.debug:
-    log.setLevel(logging.DEBUG)
-else:
-    log.root.handlers[0].formatter = logging.Formatter()
 
 
 class Twittercider(object):
 
-    def __init__(self, args):
-        self.days_ago = args.days_ago
-        self.dry_run = args.dry_run
+    def __init__(self, days_ago=0, dry_run=False):
+        self.days_ago = days_ago
+        self.dry_run = dry_run
 
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
@@ -207,14 +200,13 @@ class Twittercider(object):
 
         log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
 
-    def _backup_tweets(self):
+    def _backup_media_and_delete_tweets(self):
         finished = False
 
         max_id = None
         while not finished:
             response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
                 'count': 200,
-                'include_rts': False,
                 'max_id': max_id,
             })
             response.raise_for_status()
@@ -229,18 +221,26 @@ class Twittercider(object):
 
                 delta = self.now - created_at
 
+                permalink = 'https://twitter.com/{}/status/{}'.format(tweet['user']['screen_name'], tweet['id_str'])
+
                 if delta.days >= self.days_ago:
-                    if 'extended_entities' in tweet:
-                        if 'media' in tweet['extended_entities']:
-                            for media in tweet['extended_entities']['media']:
-                                self._backup_twitter_media(media['media_url'], tweet)
+                    if 'retweeted_status' not in tweet:  # Sometimes tweet['retweeted'] lies, this is a better check
+                        if 'extended_entities' in tweet:
+                            if 'media' in tweet['extended_entities']:
+                                log.debug('Tweet with media {}'.format(pformat(tweet)))
+
+                                for media in tweet['extended_entities']['media']:
+                                    self._backup_twitter_media(media['media_url'], tweet)
 
                     if not self.dry_run:
-                        log.info('Pretending to delete {}'.format(tweet['id_str']))
+                        response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
+                        response.raise_for_status()
 
-                        # self.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str'])
+                        log.info('Deleted {}'.format(permalink))
+                    else:
+                        log.info('Pretending to delete {}'.format(permalink))
                 else:
-                    log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(tweet['id_str'], delta.days, self.days_ago))
+                    log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(permalink, delta.days, self.days_ago))
 
             old_max_id = max_id
             max_id = tweet['id_str']
@@ -249,11 +249,18 @@ class Twittercider(object):
 
     def twittercide(self):
         self._get_or_create_parent_dir()
-        self._backup_tweets()
+        self._backup_media_and_delete_tweets()
 
-        log.info('Finished')
+        log.info("Finished! (Due to limits to Twitter's API, there still might be older tweets we can't access and delete yet.)")
 
 
 if __name__ == '__main__':
-    t = Twittercider(args)
+    args = parser.parse_args()
+
+    if args.debug:
+        log.setLevel(logging.DEBUG)
+    else:
+        log.root.handlers[0].formatter = logging.Formatter()
+
+    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run)
     t.twittercide()
