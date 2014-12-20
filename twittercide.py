@@ -41,6 +41,8 @@ args = parser.parse_args()
 
 if args.debug:
     log.setLevel(logging.DEBUG)
+else:
+    log.root.handlers[0].formatter = logging.Formatter()
 
 
 class Twittercider(object):
