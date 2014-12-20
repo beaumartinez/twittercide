@@ -4,6 +4,7 @@ from argparse import ArgumentParser
 from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
+from hashlib import md5
 from os.path import basename
 import json
 import logging
@@ -62,8 +63,8 @@ class Twittercider(object):
 
         self.parent_dir_id = parent_dir['id']
 
-    def _prepare_upload(self, url, files):
-        request = Request('post', url, files=files)
+    def _prepare_upload(self, method, url, params, files):
+        request = Request(method, url, params=params, files=files)
         request = self.session.prepare_request(request)
 
         # This is a bit ugly (ideally requests would expose a way to set the
@@ -105,29 +106,58 @@ class Twittercider(object):
         response_data = response.json()
         results = response_data['items']
 
+        insert = False
+        update = False
+
         try:
             result = results[0]
         except IndexError:
-            log.debug('File not found in Google Drive. Uploading')
+            insert = True
 
+            log.debug('File not found in Google Drive. Uploading')
+        else:
+            if len(results) > 1:
+                raise ValueError('More than 1 matching file {}'.format(len(results)))
+
+            if file_:
+                checksum = md5(file_.getvalue())
+                checksum = checksum.hexdigest()
+
+                if result['md5Checksum'] != checksum:
+                    update = True
+
+                    log.debug('MD5 checksums differ. File: {}, Google Drive: {}. Re-uploading'.format(checksum, result['md5Checksum']))
+
+        if insert or update:
             # Google Drive expects multipart/related, and for the fields to be in a
             # particular order. First, the metadata, then the file.
             #
             # It expects the metadata as application/json, and the file as base64 (with
             # Content-Transfer-Encoding: base64).
 
-            url = 'https://www.googleapis.com/upload/drive/v2/files'
+            if insert:
+                method = 'post'
+                url = 'https://www.googleapis.com/upload/drive/v2/files'
+            else:
+                assert update
+
+                method = 'put'
+                url = 'https://www.googleapis.com/upload/drive/v2/files/{}'.format(result['id'])
 
             files = OrderedDict()
             files['metadata'] = ('metadata', json.dumps(metadata), 'application/json')
 
             if file_:
-                url = 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart'
+                params = {
+                    'uploadType': 'multipart',
+                }
                 
                 # TODO: Determine mimetype
                 files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
+            else:
+                params = {}
 
-            request = self._prepare_upload(url, files)
+            request = self._prepare_upload(method, url, params, files)
             response = self.session.send(request)
 
             log.debug('Upload response {}'.format(response.text))
@@ -136,6 +166,10 @@ class Twittercider(object):
 
             response_data = response.json()
             result = response_data
+
+            if update:
+                if result['md5Checksum'] != checksum:
+                    raise ValueError('MD5 checksums still differ after re-upload. File: {}, Google Drive: {}'.format(checksum, result['md5Checksum']))
 
         return result
 
@@ -149,7 +183,9 @@ class Twittercider(object):
             },)
         }
 
-        file_response = self.session.get(url)
+        orig_url = url + ':orig'  # Get the original, highest-quality version of the media
+
+        file_response = self.session.get(orig_url)
         file_response.raise_for_status()
 
         file_ = file_response.content
