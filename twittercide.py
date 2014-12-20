@@ -123,6 +123,8 @@ class Twittercider(object):
 
             if file_:
                 url = 'https://www.googleapis.com/upload/drive/v2/files?uploadType=multipart'
+                
+                # TODO: Determine mimetype
                 files['file'] = ('file', b64encode(file_.read()), 'image/png', {'Content-Transfer-Encoding': 'base64'})
 
             request = self._prepare_upload(url, files)
@@ -158,34 +160,44 @@ class Twittercider(object):
         log.info('Backed up {}'.format(url))
 
     def _backup_tweets(self):
-        response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
-            'count': 200,
-            'include_rts': False,
-        })
-        response.raise_for_status()
+        finished = False
 
-        results = response.json()
+        max_id = None
+        while not finished:
+            response = self.session.get('https://api.twitter.com/1.1/statuses/user_timeline.json', params={
+                'count': 200,
+                'include_rts': False,
+                'max_id': max_id,
+            })
+            response.raise_for_status()
 
-        for tweet in results:
-            created_at = tweet['created_at']
-            created_at = dateutil.parser.parse(created_at)
+            log.debug('Loaded next 200 tweets')
 
-            delta = self.now - created_at
+            results = response.json()
 
-            if delta.days >= self.days_ago:
-                if 'extended_entities' in tweet:
-                    if 'media' in tweet['extended_entities']:
-                        for media in tweet['extended_entities']['media']:
-                            self._backup_twitter_media(media['media_url'])
+            for tweet in results:
+                created_at = tweet['created_at']
+                created_at = dateutil.parser.parse(created_at)
 
-                if not self.dry_run:
-                    log.info('Pretending to delete {}'.format(tweet['id_str']))
+                delta = self.now - created_at
 
-                    # self.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str'])
-            else:
-                log.debug('Tweet not old enough ({} days old, must be at least {}). Skipping'.format(delta.days, self.days_ago))
+                if delta.days >= self.days_ago:
+                    if 'extended_entities' in tweet:
+                        if 'media' in tweet['extended_entities']:
+                            for media in tweet['extended_entities']['media']:
+                                self._backup_twitter_media(media['media_url'])
 
-        max_id = tweet['id_str']
+                    if not self.dry_run:
+                        log.info('Pretending to delete {}'.format(tweet['id_str']))
+
+                        # self.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str'])
+                else:
+                    log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(tweet['id_str'], delta.days, self.days_ago))
+
+            old_max_id = max_id
+            max_id = tweet['id_str']
+
+            finished = max_id == old_max_id
 
     def twittercide(self):
         self._get_or_create_parent_dir()
