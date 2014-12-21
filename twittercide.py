@@ -6,8 +6,8 @@ from cStringIO import StringIO
 from collections import OrderedDict
 from datetime import datetime
 from hashlib import md5
-from pprint import pformat
 from os.path import basename
+from pprint import pformat
 from zipfile import ZipFile
 import json
 import logging
