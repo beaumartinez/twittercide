@@ -37,18 +37,20 @@ parser = ArgumentParser(
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--nuclear', '-n', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
 parser.add_argument('--days_ago', '-d', help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
 parser.add_argument('--dry-run', action='store_true', help="don't delete any tweets, but backup tweeted photos")
+parser.add_argument('--nuclear', '-n', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
+parser.add_argument('--force-delete', '-f', action='store_true', help="delete tweets even if the media couldn't be backed up")
 parser.add_argument('--debug', '-v', action='store_true', help='show debug logging')
 
 
 class Twittercider(object):
 
-    def __init__(self, days_ago=0, dry_run=False, nuke=None):
+    def __init__(self, days_ago=0, dry_run=False, nuke=None, force_delete=False):
         self.days_ago = days_ago
         self.dry_run = dry_run
         self.nuke = nuke
+        self.force_delete = force_delete
 
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
@@ -204,7 +206,7 @@ class Twittercider(object):
         file_response = self.session.get(orig_url)
 
         skip_update = False
-        skip_deletion = False
+        failed_to_backup = False
 
         try:
             file_response.raise_for_status()
@@ -230,7 +232,7 @@ class Twittercider(object):
                             if file_response.status_code == 404:
                                 log.warning("Couldn't get normal media for {}".format(url))
 
-                                skip_deletion = True
+                                failed_to_backup = True
                             else:
                                 raise
                     else:
@@ -240,17 +242,17 @@ class Twittercider(object):
             else:
                 raise
 
-        if not skip_deletion:
+        if failed_to_backup:
+            log.info("Skipping backing up {}. Couldn't get media. Won't delete either".format(url))
+        else:
             file_ = file_response.content
             file_ = StringIO(file_)
 
             upload = self._get_or_upload(metadata, file_, skip_update=skip_update)
 
             log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
-        else:
-            log.info("Skipping backing up {}. Couldn't get media. Won't delete either".format(url))
 
-        return skip_deletion
+        return failed_to_backup
 
     def _backup_media_and_delete(self, tweet, skip_deletion_error=False):
         created_at = tweet['created_at']
@@ -271,12 +273,13 @@ class Twittercider(object):
 
                 if entities_field in tweet:
                     if 'media' in tweet[entities_field]:
-                        log.debug('Tweet with media {}'.format(pformat(tweet)))
+                        if tweet[entities_field]['media']:
+                            log.debug('Tweet with media {}'.format(pformat(tweet)))
 
-                        for media in tweet[entities_field]['media']:
-                            delete = self._backup_twitter_media(media['media_url'], tweet)
+                            for media in tweet[entities_field]['media']:
+                                delete = self._backup_twitter_media(media['media_url'], tweet)  # Only false if we failed to backup media
 
-            if delete:
+            if delete or self.force_delete:
                 if not self.dry_run:
                     response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
                     response.raise_for_status()
@@ -378,5 +381,5 @@ if __name__ == '__main__':
     else:
         log.root.handlers[0].formatter = logging.Formatter()
 
-    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run, nuke=args.nuclear)
+    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run, nuke=args.nuclear, force_delete=args.force_delete)
     t.twittercide()
