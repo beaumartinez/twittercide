@@ -204,6 +204,7 @@ class Twittercider(object):
         file_response = self.session.get(orig_url)
 
         skip_update = False
+        skip_deletion = False
 
         try:
             file_response.raise_for_status()
@@ -222,7 +223,16 @@ class Twittercider(object):
                         log.warning("Couldn't get large media for {}. Trying with normal".format(url))
 
                         file_response = self.session.get(url)
-                        file_response.raise_for_status()
+
+                        try:
+                            file_response.raise_for_status()
+                        except HTTPError:
+                            if file_response.status_code == 404:
+                                log.warning("Couldn't get normal media for {}".format(url))
+
+                                skip_deletion = True
+                            else:
+                                raise
                     else:
                         raise
 
@@ -230,12 +240,17 @@ class Twittercider(object):
             else:
                 raise
 
-        file_ = file_response.content
-        file_ = StringIO(file_)
+        if not skip_deletion:
+            file_ = file_response.content
+            file_ = StringIO(file_)
 
-        upload = self._get_or_upload(metadata, file_, skip_update=skip_update)
+            upload = self._get_or_upload(metadata, file_, skip_update=skip_update)
 
-        log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
+            log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
+        else:
+            log.info("Skipping backing up {}. Couldn't get media. Won't delete either".format(url))
+
+        return skip_deletion
 
     def _backup_media_and_delete(self, tweet, skip_deletion_error=False):
         created_at = tweet['created_at']
@@ -244,6 +259,8 @@ class Twittercider(object):
         delta = self.now - created_at
 
         permalink = 'https://twitter.com/{}/status/{}'.format(tweet['user']['screen_name'], tweet['id_str'])
+
+        delete = True
 
         if delta.days >= self.days_ago:
             if 'retweeted_status' not in tweet:  # Sometimes tweet['retweeted'] lies, this is a better check
@@ -257,15 +274,16 @@ class Twittercider(object):
                         log.debug('Tweet with media {}'.format(pformat(tweet)))
 
                         for media in tweet[entities_field]['media']:
-                            self._backup_twitter_media(media['media_url'], tweet)
+                            delete = self._backup_twitter_media(media['media_url'], tweet)
 
-            if not self.dry_run:
-                response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
-                response.raise_for_status()
+            if delete:
+                if not self.dry_run:
+                    response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
+                    response.raise_for_status()
 
-                log.info('Deleted {}'.format(permalink))
-            else:
-                log.info('Pretending to delete {}'.format(permalink))
+                    log.info('Deleted {}'.format(permalink))
+                else:
+                    log.info('Pretending to delete {}'.format(permalink))
         else:
             log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(permalink, delta.days, self.days_ago))
 
