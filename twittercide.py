@@ -4,14 +4,18 @@ from argparse import ArgumentParser
 from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
+from datetime import datetime
 from hashlib import md5
 from pprint import pformat
 from os.path import basename
+from zipfile import ZipFile
 import json
 import logging
+import re
 
 from arrow import utcnow
 from requests import Request, Session
+from requests.exceptions import HTTPError
 from requests_foauth import Foauth
 import dateutil.parser
 
@@ -33,6 +37,7 @@ parser = ArgumentParser(
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
+parser.add_argument('--nuclear', '-n', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
 parser.add_argument('--days_ago', '-d', help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
 parser.add_argument('--dry-run', action='store_true', help="don't delete any tweets, but backup tweeted photos")
 parser.add_argument('--debug', '-v', action='store_true', help='show debug logging')
@@ -40,9 +45,10 @@ parser.add_argument('--debug', '-v', action='store_true', help='show debug loggi
 
 class Twittercider(object):
 
-    def __init__(self, days_ago=0, dry_run=False):
+    def __init__(self, days_ago=0, dry_run=False, nuke=None):
         self.days_ago = days_ago
         self.dry_run = dry_run
+        self.nuke = nuke
 
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
@@ -88,7 +94,7 @@ class Twittercider(object):
 
         return query
 
-    def _get_or_upload(self, metadata, file_=None):
+    def _get_or_upload(self, metadata, file_=None, skip_update=False):
         query = self._prepare_query(metadata)
         log.debug('Query {}'.format(query))
 
@@ -127,6 +133,11 @@ class Twittercider(object):
                     log.debug('MD5 checksums differ. File: {}, Google Drive: {}. Re-uploading'.format(checksum, result['md5Checksum']))
 
         if insert or update:
+            if update and skip_update:
+                log.debug('Skipping update')
+
+                return result
+
             # Google Drive expects multipart/related, and for the fields to be in a
             # particular order. First, the metadata, then the file.
             #
@@ -191,14 +202,72 @@ class Twittercider(object):
         orig_url = url + ':orig'  # Get the original, highest-quality version of the media
 
         file_response = self.session.get(orig_url)
-        file_response.raise_for_status()
+
+        skip_update = False
+
+        try:
+            file_response.raise_for_status()
+        except HTTPError:
+            if file_response.status_code == 404:  # We can't get the original media for some reason (already deleted?). Try with large
+                log.warning("Couldn't get original media for {}. Trying with large".format(url))
+
+                large_url = url + ':large'
+
+                file_response = self.session.get(large_url)
+
+                try:
+                    file_response.raise_for_status()
+                except HTTPError:
+                    if file_response.status_code == 404:
+                        log.warning("Couldn't get large media for {}. Trying with normal".format(url))
+
+                        file_response = self.session.get(url)
+                        file_response.raise_for_status()
+                    else:
+                        raise
+
+                skip_update = True  # We don't want to risk overriding the file on Drive in case it's higher-quality
+            else:
+                raise
 
         file_ = file_response.content
         file_ = StringIO(file_)
 
-        upload = self._get_or_upload(metadata, file_)
+        upload = self._get_or_upload(metadata, file_, skip_update=skip_update)
 
         log.info('Backed up {} to {}'.format(url, upload['alternateLink']))
+
+    def _backup_media_and_delete(self, tweet, skip_deletion_error=False):
+        created_at = tweet['created_at']
+        created_at = dateutil.parser.parse(created_at)
+
+        delta = self.now - created_at
+
+        permalink = 'https://twitter.com/{}/status/{}'.format(tweet['user']['screen_name'], tweet['id_str'])
+
+        if delta.days >= self.days_ago:
+            if 'retweeted_status' not in tweet:  # Sometimes tweet['retweeted'] lies, this is a better check
+                entities_field = 'extended_entities'
+
+                if entities_field not in tweet:  # Try and see if the tweet is from an archive. (They're in an older format, and don't have the extended_entities field)
+                    entities_field = 'entities'
+
+                if entities_field in tweet:
+                    if 'media' in tweet[entities_field]:
+                        log.debug('Tweet with media {}'.format(pformat(tweet)))
+
+                        for media in tweet[entities_field]['media']:
+                            self._backup_twitter_media(media['media_url'], tweet)
+
+            if not self.dry_run:
+                response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
+                response.raise_for_status()
+
+                log.info('Deleted {}'.format(permalink))
+            else:
+                log.info('Pretending to delete {}'.format(permalink))
+        else:
+            log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(permalink, delta.days, self.days_ago))
 
     def _backup_media_and_delete_tweets(self):
         finished = False
@@ -216,42 +285,71 @@ class Twittercider(object):
             results = response.json()
 
             for tweet in results:
-                created_at = tweet['created_at']
-                created_at = dateutil.parser.parse(created_at)
-
-                delta = self.now - created_at
-
-                permalink = 'https://twitter.com/{}/status/{}'.format(tweet['user']['screen_name'], tweet['id_str'])
-
-                if delta.days >= self.days_ago:
-                    if 'retweeted_status' not in tweet:  # Sometimes tweet['retweeted'] lies, this is a better check
-                        if 'extended_entities' in tweet:
-                            if 'media' in tweet['extended_entities']:
-                                log.debug('Tweet with media {}'.format(pformat(tweet)))
-
-                                for media in tweet['extended_entities']['media']:
-                                    self._backup_twitter_media(media['media_url'], tweet)
-
-                    if not self.dry_run:
-                        response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
-                        response.raise_for_status()
-
-                        log.info('Deleted {}'.format(permalink))
-                    else:
-                        log.info('Pretending to delete {}'.format(permalink))
-                else:
-                    log.debug('{} not old enough ({} days old, must be at least {}). Skipping'.format(permalink, delta.days, self.days_ago))
+                self._backup_media_and_delete(tweet)
 
             old_max_id = max_id
             max_id = tweet['id_str']
 
             finished = max_id == old_max_id
 
+    def _nuclear(self):
+        archive = ZipFile(self.nuke)
+        files = archive.namelist()
+
+        filtering_date = self.now.replace(days=-self.days_ago)
+        filtering_date = filtering_date.date()
+
+        def _get_tweet_file_date(filename):
+            date = re.search('(\d{4})_(\d{2}).js', filename)
+
+            if date:
+                year, month = date.groups()
+                year, month = int(year), int(month)
+
+                date = datetime(year, month, 1)
+                date = date.date()
+
+                return date
+
+        def _filter_tweet_files_with_valid_date(filename):
+            '''Return <filename> if it's a data file and if it's also within our date range, or None if it isn't.'''
+            date = _get_tweet_file_date(filename)
+
+            if date:
+                if date <= filtering_date:
+                    return filename
+
+        data_files = filter(_filter_tweet_files_with_valid_date, files)
+        data_files = sorted(data_files, key=_get_tweet_file_date, reverse=True)
+
+        for data_file in data_files:
+            raw_data = archive.read(data_file)
+
+            # Data files are in the format:
+            #
+            #     Grailbird.data.tweets_2014_12 =
+            #     <Valid JSON object>
+            #
+            # We want to get to <Valid JSON object>, so we find the first carraige return and json.loads that.
+            cr_index = raw_data.find('\n')
+            raw_data = raw_data[cr_index:]
+
+            tweets = json.loads(raw_data)
+
+            for tweet in tweets:
+                self._backup_media_and_delete(tweet, skip_deletion_error=True)
+
     def twittercide(self):
         self._get_or_create_parent_dir()
-        self._backup_media_and_delete_tweets()
 
-        log.info("Finished! (Due to limits to Twitter's API, there still might be older tweets we can't access and delete yet.)")
+        if self.nuke:
+            self._nuclear()
+
+            log.info("Finished!")
+        else:
+            self._backup_media_and_delete_tweets()
+
+            log.info("Finished! (Due to limits to Twitter's API, there still might be older tweets we can't access and delete yet.)")
 
 
 if __name__ == '__main__':
@@ -262,5 +360,5 @@ if __name__ == '__main__':
     else:
         log.root.handlers[0].formatter = logging.Formatter()
 
-    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run)
+    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run, nuke=args.nuclear)
     t.twittercide()
