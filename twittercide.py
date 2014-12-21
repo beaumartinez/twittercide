@@ -27,21 +27,25 @@ log.setLevel(logging.INFO)
 
 
 parser = ArgumentParser(
-    description='Delete your last 3200 tweets and backup tweeted photos to Google Drive',
+    description='Delete your tweets and backup tweeted photos to Google Drive',
     epilog='''Twittercide uses foauth.org <http://foauth.org/> to authenticate with Twitter and Google's APIs.
 
     In order to use it, you'll need to sign up with foauth.org, and authorize both those services <https://foauth.org/services/>.
 
     For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
+
+    We can only delete your last 3200 tweets using the Twitter API, but you can use a Twitter archive zip file with the --nuclear argument to delete all your tweets.
+
+    We check the MD5 checksums of backed-up photos, and we won't delete tweets with photos if we couldn't back them up. You can delete them anyway with the --force-delete argument.
     '''
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--days_ago', '-d', help="only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
-parser.add_argument('--dry-run', action='store_true', help="don't delete any tweets, but backup tweeted photos")
+parser.add_argument('--days_ago', '-d', help="Only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
+parser.add_argument('--dry-run', action='store_true', help="Don't delete any tweets, but backup tweeted photos")
 parser.add_argument('--nuclear', '-n', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
-parser.add_argument('--force-delete', '-f', action='store_true', help="delete tweets even if the media couldn't be backed up")
-parser.add_argument('--debug', '-v', action='store_true', help='show debug logging')
+parser.add_argument('--force-delete', '-f', action='store_true', help="Delete tweets even if the media couldn't be backed up")
+parser.add_argument('--debug', '-v', action='store_true', help='Show debug logging')
 
 
 class Twittercider(object):
