@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-from argparse import ArgumentParser
+from argparse import ArgumentParser, RawTextHelpFormatter
 from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
@@ -26,18 +26,13 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
+with open('README.md') as readme_file:
+    readme = readme_file.read()
+
 parser = ArgumentParser(
     description='Delete your tweets and backup tweeted photos to Google Drive',
-    epilog='''Twittercide uses foauth.org <http://foauth.org/> to authenticate with Twitter and Google's APIs.
-
-    In order to use it, you'll need to sign up with foauth.org, and authorize both those services <https://foauth.org/services/>.
-
-    For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
-
-    We can only delete your last 3200 tweets using the Twitter API, but you can use a Twitter archive zip file with the --nuclear argument to delete all your tweets.
-
-    We check the MD5 checksums of backed-up photos, and we won't delete tweets with photos if we couldn't back them up. You can delete them anyway with the --force-delete argument.
-    '''
+    epilog=readme,
+    formatter_class=RawTextHelpFormatter
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
