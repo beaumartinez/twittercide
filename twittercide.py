@@ -36,7 +36,8 @@ parser = ArgumentParser(
 )
 parser.add_argument('email', help='foauth.org email')
 parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--days_ago', '-d', help="Only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
+parser.add_argument('--days-ago', '-d', help="Only delete tweets older than DAYS_AGO days. (A value of 0 will delete all tweets)", type=int)
+parser.add_argument('--since-id', '-s', help="Only delete tweets once we've seen this ID")
 parser.add_argument('--dry-run', action='store_true', help="Don't delete any tweets, but backup tweeted photos")
 parser.add_argument('--nuclear', '-n', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
 parser.add_argument('--force-delete', '-f', action='store_true', help="Delete tweets even if the media couldn't be backed up")
@@ -45,11 +46,12 @@ parser.add_argument('--debug', '-v', action='store_true', help='Show debug loggi
 
 class Twittercider(object):
 
-    def __init__(self, days_ago=0, dry_run=False, nuke=None, force_delete=False):
+    def __init__(self, days_ago=0, dry_run=False, nuke=None, force_delete=False, since_id=None):
         self.days_ago = days_ago
         self.dry_run = dry_run
         self.nuke = nuke
         self.force_delete = force_delete
+        self.since_id = since_id
 
         self.session = Session()
         self.session.mount('https://', Foauth(args.email, args.password))
@@ -242,7 +244,8 @@ class Twittercider(object):
                 raise
 
         if failed_to_backup:
-            log.info("Skipping backing up {}. Couldn't get media. Won't delete either".format(url))
+            if not self.force_delete:
+                log.info("Skipping backing up {}. Couldn't get media. Won't delete either".format(url))
         else:
             file_ = file_response.content
             file_ = StringIO(file_)
@@ -276,14 +279,36 @@ class Twittercider(object):
                             log.debug('Tweet with media {}'.format(pformat(tweet)))
 
                             for media in tweet[entities_field]['media']:
-                                delete = self._backup_twitter_media(media['media_url'], tweet)  # Only false if we failed to backup media
+                                failed_to_backup = self._backup_twitter_media(media['media_url'], tweet)
+
+                                delete = not failed_to_backup
 
             if delete or self.force_delete:
                 if not self.dry_run:
                     response = self.session.post('https://api.twitter.com/1.1/statuses/destroy/{}.json'.format(tweet['id_str']))
-                    response.raise_for_status()
 
-                    log.info('Deleted {}'.format(permalink))
+                    try:
+                        response.raise_for_status()
+                    except HTTPError:
+                        if skip_deletion_error and response.status_code == 404:
+                            log.info('Already deleted {}'.format(permalink))
+                        else:
+                            benign_error = False
+
+                            response_data = response.json()
+
+                            for error in response_data['errors']:
+                                # Check to see if it's a protected RT
+                                # At the time, we could RT it. But now, since the account is protected, we can't even delete it
+                                if error['code'] == 179:
+                                    benign_error = True
+
+                                    log.info('''Couldn't delete {}, skipping. "{}"'''.format(permalink, error['message']))
+
+                            if not benign_error:
+                                raise
+                    else:
+                        log.info('Deleted {}'.format(permalink))
                 else:
                     log.info('Pretending to delete {}'.format(permalink))
         else:
@@ -342,6 +367,8 @@ class Twittercider(object):
         data_files = filter(_filter_tweet_files_with_valid_date, files)
         data_files = sorted(data_files, key=_get_tweet_file_date, reverse=True)
 
+        since_id_found = False
+
         for data_file in data_files:
             raw_data = archive.read(data_file)
 
@@ -357,7 +384,14 @@ class Twittercider(object):
             tweets = json.loads(raw_data)
 
             for tweet in tweets:
-                self._backup_media_and_delete(tweet, skip_deletion_error=True)
+                if not self.since_id or (self.since_id and since_id_found):
+                    self._backup_media_and_delete(tweet, skip_deletion_error=True)
+                else:
+                    log.debug('Since ID {} not found yet. Skipping'.format(self.since_id, tweet['id_str']))
+
+                if self.since_id:
+                    if tweet['id_str'] == self.since_id:
+                        since_id_found = True
 
     def twittercide(self):
         self._get_or_create_parent_dir()
@@ -380,5 +414,5 @@ if __name__ == '__main__':
     else:
         log.root.handlers[0].formatter = logging.Formatter()
 
-    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run, nuke=args.nuclear, force_delete=args.force_delete)
+    t = Twittercider(days_ago=args.days_ago, dry_run=args.dry_run, nuke=args.nuclear, force_delete=args.force_delete, since_id=args.since_id)
     t.twittercide()
