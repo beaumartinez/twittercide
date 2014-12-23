@@ -25,9 +25,11 @@ setup(
     long_description=readme,
     name='twittercide',
     packages=find_packages(),
-    scripts=[
-        'twittercide.py',
-    ],
+    entry_points={
+        'console_scripts': [
+            'twittercide = twittercide.__main__:main',
+        ],
+    },
     url='http://github.com/beaumartinez/twittercide',
     version='0.1',
 )

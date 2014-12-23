@@ -18,8 +18,6 @@ from requests.exceptions import HTTPError
 from requests_foauth import Foauth
 import dateutil.parser
 
-from .args import parse_args
-
 
 logging.basicConfig()
 
@@ -390,24 +388,3 @@ class Twittercider(object):
             self._backup_photos_and_delete_tweets_using_api()
 
             log.info("Finished! (Due to limits to Twitter's API, there still might be older tweets we can't access and delete yet.)")
-
-
-if __name__ == '__main__':
-    from sys import argv
-
-    args = parse_args(argv)
-
-    if args.verbose:
-        log.setLevel(logging.DEBUG)
-    else:
-        log.root.handlers[0].formatter = logging.Formatter()
-
-    t = Twittercider(
-        archive=args.archive,
-        dry_run=args.dry_run,
-        force_delete=args.force_delete,
-        older_than=args.older_than,
-        since_id=args.since_id
-    )
-
-    t.twittercide()
