@@ -1,6 +1,6 @@
 # Twittercide
 
-Delete your tweets and backup tweeted photos to Google Drive.
+Delete your tweets and backup tweeted photos to [Google Drive](https://www.google.com/drive/).
 
 ## Installation
 
