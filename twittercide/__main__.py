@@ -6,7 +6,7 @@ from .twittercide import Twittercider, log
 
 
 def main():
-    args = parse_args(argv)
+    args = parse_args(argv[1:])  # We don't want the script name
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
@@ -14,6 +14,8 @@ def main():
         log.root.handlers[0].formatter = logging.Formatter()
 
     t = Twittercider(
+        args.email,
+        args.password,
         archive=args.archive,
         dry_run=args.dry_run,
         force_delete=args.force_delete,
