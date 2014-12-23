@@ -2,6 +2,10 @@
 
 Delete your tweets and backup tweeted photos to [Google Drive](https://www.google.com/drive/).
 
+> Twittercide (noun)
+>
+> 1. To delete/wipe everything on your Twitter page, effectively committing social networking suicide on Twitter.
+
 ## Installation
 
     pip install http://github.com/beaumartinez/twittercide/
@@ -10,33 +14,37 @@ Didn't work?
 
     easy_install pip
 
-And try again. Still no joy? Install [Python](https://www.python.org/downloads/) and try again.
+And try again. Still no joy? [Install Python](https://www.python.org/downloads/) and try again.
 
 ## About
 
-Twittercide deletes your tweets and backs-up tweeted photos to a folder in Google Drive called Twittercide (surprise!).
-
-It uses [foauth.org](http://foauth.org/) to authenticate with Twitter and Google's APIs. In order to use it, you'll
-need to sign up with foauth.org, and [authorize both those services](https://foauth.org/services/).
-
-For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
+Twittercide deletes your tweets and backs-up tweeted photos to Google Drive. It saves them to a folder called
+Twittercide. The backed-up photos have the modified date set to when you tweeted them, and the description set as the
+tweet text.
 
 Because of limitations to Twitter's API, Twittercide can only delete your last 3200 tweets (if you're someone like me,
 that's a drop in the ocean compared to how much I've tweeted over the years), but you can use a
 [Twitter archive zip file](https://support.twitter.com/articles/20170160-downloading-your-twitter-archive) with the
-`--nuclear` option to delete all your tweets, from all time, forever.
+`--archive` option to delete all your tweets, from all time, *forever*.
 
 Twittercide checks the MD5 checksums of backed-up photos, and it won't delete tweets with photos if it can't back them
 up. You can delete them anyway with the `--force-delete` option. It's also very conservative when it comes to errors.
-Anything other than an HTTP 200 and it'll raise an exception, stopping any potential global catastrophe. 
+Any non-kosher HTTP status codes and it'll raise an exception, stopping any potential global catastrophe. 
 
 ## Usage
+
+Twittercide uses [foauth.org](http://foauth.org/) to authenticate with Twitter and Google's APIs. **In order to use it,
+you'll need to sign up with foauth.org**, and [authorize both those services](https://foauth.org/services/).
+
+For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
 
 For full usage—
 
     twittercide --help
 
-To delete your tweets—
+### Example usage
+
+To delete all your tweets—
 
     twittercide <foauth.org email> <foauth.org password>
 
