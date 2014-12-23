@@ -1,0 +1,4 @@
+.coverage
+build
+dist
+twittercide.egg-info
