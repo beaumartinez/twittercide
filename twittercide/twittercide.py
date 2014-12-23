@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 
-from argparse import ArgumentParser, RawTextHelpFormatter
 from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
@@ -19,6 +18,8 @@ from requests.exceptions import HTTPError
 from requests_foauth import Foauth
 import dateutil.parser
 
+from .args import parse_args
+
 
 logging.basicConfig()
 
@@ -26,27 +27,9 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
-with open('README.md') as readme_file:
-    readme = readme_file.read()
-
-parser = ArgumentParser(
-    description='Delete your tweets and backup tweeted photos to Google Drive',
-    epilog=readme,
-    formatter_class=RawTextHelpFormatter
-)
-parser.add_argument('email', help='foauth.org email')
-parser.add_argument('password', help='foauth.org password')
-parser.add_argument('--archive', '-a', help="GO NUCLEAR. Delete using a Twitter archive zip file", type=file)
-parser.add_argument('--dry-run', action='store_true', help="Don't delete any tweets, but backup tweeted photos")
-parser.add_argument('--force-delete', '-f', action='store_true', help="Delete tweets even if the photos couldn't be backed up")
-parser.add_argument('--older-than', '-o', help="Only delete tweets as old and older than OLDER_THAN days (0 will still delete all tweets)", type=int)
-parser.add_argument('--since-id', '-s', help="Only delete tweets once we find this ID. If it's not found, no tweets will be deleted")
-parser.add_argument('--verbose', '-v', action='store_true', help='Show verbose debug logging')
-
-
 class Twittercider(object):
 
-    def __init__(self, archive=None, dry_run=False, force_delete=False, older_than=0, since_id=None):
+    def __init__(self, email, password, archive=None, dry_run=False, force_delete=False, older_than=0, since_id=None):
         self.archive = archive
         self.dry_run = dry_run
         self.force_delete = force_delete
@@ -54,7 +37,7 @@ class Twittercider(object):
         self.since_id = since_id
 
         self.session = Session()
-        self.session.mount('https://', Foauth(args.email, args.password))
+        self.session.mount('https://', Foauth(email, password))
 
         self.now = utcnow()
 
@@ -410,7 +393,9 @@ class Twittercider(object):
 
 
 if __name__ == '__main__':
-    args = parser.parse_args()
+    from sys import argv
+
+    args = parse_args(argv)
 
     if args.verbose:
         log.setLevel(logging.DEBUG)
