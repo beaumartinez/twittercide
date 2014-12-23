@@ -66,7 +66,7 @@ Create a virtualenv and install the requirements in `requirements.txt`.
 
 To run tests—
 
-    invoke test
+    inv test
 
 I use [Invoke](https://github.com/pyinvoke/invoke), which is the successor to the venerable Fabric.
 
