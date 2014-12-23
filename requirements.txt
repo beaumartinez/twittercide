@@ -1,0 +1,7 @@
+arrow==0.4.4
+coverage==3.7.1
+nose-progressive==1.5.1
+nose==1.3.4
+python-dateutil==2.3
+requests-foauth==0.1.1
+requests==2.5.0
