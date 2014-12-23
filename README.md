@@ -14,8 +14,10 @@ And try again. Still no joy? Install [Python](https://www.python.org/downloads/)
 
 ## About
 
-Twittercide uses [foauth.org](http://foauth.org/) to authenticate with Twitter and Google's APIs. In order to use it,
-you'll need to sign up with foauth.org, and [authorize both those services](https://foauth.org/services/).
+Twittercide deletes your tweets and backs-up tweeted photos to a folder in Google Drive called Twittercide (surprise!).
+
+It uses [foauth.org](http://foauth.org/) to authenticate with Twitter and Google's APIs. In order to use it, you'll
+need to sign up with foauth.org, and [authorize both those services](https://foauth.org/services/).
 
 For Twitter, you need to check the option to "read and send tweets". For Google, you need "access your documents".
 
@@ -40,7 +42,11 @@ To delete your tweets—
 
 To delete only tweets that are 7 days old and older—
 
-    twittercide <foauth.org email> <foauth.org password> --days-ago 7
+    twittercide <foauth.org email> <foauth.org password> --older-than 7
+
+To delete only tweets that are older than a tweet with ID 123—
+
+    twittercide <foauth.org email> <foauth.org password> --since-id 123
 
 To run a dry run, without deleting any tweets but still backing up photos—
 
@@ -48,11 +54,21 @@ To run a dry run, without deleting any tweets but still backing up photos—
 
 To run a dry run with additional debug information—
 
-    twittercide <foauth.org email> <foauth.org password> --dry-run --debug
+    twittercide <foauth.org email> <foauth.org password> --dry-run --verbose
 
 To delete the tweets in a Twitter archive zip file—
 
-    twittercide <foauth.org email> <foauth.org password> --nuclear <path to Twitter archive zip file>
+    twittercide <foauth.org email> <foauth.org password> --archive <path to Twitter archive zip file>
+
+## Development
+
+Create a virtualenv and install the requirements in `requirements.txt`.
+
+To run tests—
+
+    invoke test
+
+I use [Invoke](https://github.com/pyinvoke/invoke), which is the successor to the venerable Fabric.
 
 ## Disclaimer
 
