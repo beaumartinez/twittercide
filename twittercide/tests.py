@@ -1,6 +1,6 @@
 from unittest import TestCase
 
-from .twittercide import parse_args
+from .args import parse_args
 
 
 class TwittercideTest(TestCase):
