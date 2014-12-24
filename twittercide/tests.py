@@ -1,6 +1,7 @@
 from unittest import TestCase
 
 from .args import parse_args
+from .twittercide import _QUERY_BLACKLIST, _prepare_query
 
 
 class TwittercideTest(TestCase):
@@ -76,3 +77,50 @@ class TwittercideTest(TestCase):
 
         args = parse_args((email, password, '-v'))
         self.assertTrue(args.verbose)
+
+    def test_prepare_query(self):
+        # Empty
+
+        query = {
+
+        }
+        prepared_query = _prepare_query(query)
+
+        self.assertEquals(prepared_query, '')
+
+        # Whitelisted, also ordering
+
+        query = {
+            'a': 'value',
+            'b': 'value'
+        }
+        prepared_query = _prepare_query(query)
+
+        for key in query:
+            self.assertTrue(key not in _QUERY_BLACKLIST)
+
+        self.assertEquals(prepared_query, 'a = "value" and b = "value"')
+
+        # Blacklisted
+
+        query = {
+            _QUERY_BLACKLIST[0]: 'value',
+        }
+        prepared_query = _prepare_query(query)
+
+        for key in query:
+            self.assertTrue(key in _QUERY_BLACKLIST)
+
+        self.assertEquals(prepared_query, '')
+
+        # Parents, the one special case
+
+        query = {
+            'parents': ({
+                'kind': 'drive#folder',
+                'id': 'id',
+            },)
+        }
+        prepared_query = _prepare_query(query)
+
+        self.assertEquals(prepared_query, '"id" in parents')

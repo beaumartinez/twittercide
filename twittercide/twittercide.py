@@ -23,6 +23,32 @@ log = logging.getLogger(__name__)
 log.setLevel(logging.INFO)
 
 
+_QUERY_BLACKLIST = ('description', 'modifiedDate')
+
+
+def _prepare_query(metadata):
+    query = list()
+
+    keys = sorted(metadata)
+    for key in keys:
+        value = metadata[key]
+
+        if key == 'parents':
+            for subvalue in value:
+                # When in the metadata, each parent item is object. To search, we just need the ID
+                subvalue = subvalue['id']
+
+                query.append('"{}" in {}'.format(subvalue, key))
+        elif key in _QUERY_BLACKLIST:
+            pass
+        else:
+            query.append('{} = "{}"'.format(key, value))
+
+    query = ' and '.join(query)
+
+    return query
+
+
 class Twittercider(object):
 
     def __init__(self, email, password, archive=None, dry_run=False, force_delete=False, older_than=0, since_id=None):
@@ -57,27 +83,8 @@ class Twittercider(object):
 
         return request
 
-    def _prepare_query(self, metadata):
-        query = list()
-
-        for key, value in metadata.iteritems():
-            if key == 'parents':
-                for subvalue in value:
-                    # When in the metadata, each parent item is object. To search, we just need the ID
-                    subvalue = subvalue['id']
-
-                    query.append('"{}" in {}'.format(subvalue, key))
-            elif key in ('description', 'modifiedDate'):
-                pass
-            else:
-                query.append('{} = "{}"'.format(key, value))
-
-        query = ' and '.join(query)
-
-        return query
-
     def _get_or_upload(self, metadata, file_=None, skip_update=False):
-        query = self._prepare_query(metadata)
+        query = _prepare_query(metadata)
         log.debug('Query {}'.format(query))
 
         response = self.session.get('https://www.googleapis.com/drive/v2/files', params={
