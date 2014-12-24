@@ -320,8 +320,6 @@ class Twittercider(object):
             finished = max_id == old_max_id
 
     def _backup_photos_and_delete_tweets_using_archive(self):
-        # TODO: Use CSV
-
         archive = ZipFile(self.archive)
         files = archive.namelist()
 
