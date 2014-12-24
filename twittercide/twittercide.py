@@ -3,14 +3,12 @@
 from base64 import b64encode
 from cStringIO import StringIO
 from collections import OrderedDict
-from datetime import datetime
 from hashlib import md5
 from os.path import basename
 from pprint import pformat
 from zipfile import ZipFile
 import json
 import logging
-import re
 
 from arrow import utcnow
 from requests import Request, Session
@@ -323,31 +321,8 @@ class Twittercider(object):
         archive = ZipFile(self.archive)
         files = archive.namelist()
 
-        filtering_date = self.now.replace(days=-self.older_than)
-        filtering_date = filtering_date.date()
-
-        def _get_tweet_file_date(filename):
-            date = re.search('(\d{4})_(\d{2}).js', filename)
-
-            if date:
-                year, month = date.groups()
-                year, month = int(year), int(month)
-
-                date = datetime(year, month, 1)
-                date = date.date()
-
-                return date
-
-        def _filter_tweet_files_with_valid_date(filename):
-            '''Return <filename> if it's a data file and if it's also within our date range, or None if it isn't.'''
-            date = _get_tweet_file_date(filename)
-
-            if date:
-                if date <= filtering_date:
-                    return filename
-
-        data_files = filter(_filter_tweet_files_with_valid_date, files)
-        data_files = sorted(data_files, key=_get_tweet_file_date, reverse=True)
+        data_files = filter(lambda x: 'data/js' in x, files)
+        data_files = sorted(data_files, reverse=True)
 
         since_id_found = False
 
