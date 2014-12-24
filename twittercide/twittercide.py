@@ -322,7 +322,7 @@ class Twittercider(object):
     def _backup_photos_and_delete_tweets_using_archive(self):
         # TODO: Use CSV
 
-        archive = ZipFile(self.nuke)
+        archive = ZipFile(self.archive)
         files = archive.namelist()
 
         filtering_date = self.now.replace(days=-self.older_than)
