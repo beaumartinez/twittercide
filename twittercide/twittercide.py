@@ -166,9 +166,9 @@ class Twittercider(object):
             response_data = response.json()
             result = response_data
 
-        if file_:
-            if result['md5Checksum'] != checksum:
-                raise ValueError('MD5 checksums differ after upload. File: {}, Google Drive: {}'.format(checksum, result['md5Checksum']))
+            if file_:
+                if result['md5Checksum'] != checksum:
+                    raise ValueError('MD5 checksums differ after upload. File: {}, Google Drive: {}'.format(checksum, result['md5Checksum']))
 
         return result
 
@@ -188,46 +188,30 @@ class Twittercider(object):
             },)
         }
 
-        orig_url = url + ':orig'  # Get the original, highest-quality version of the photo
-
-        file_response = self.session.get(orig_url)
+        file_response = self.session.get(url + ':orig')  # Get the original, highest-quality version of the photo
 
         skip_update = False
         failed_to_backup = False
 
-        try:
+        if file_response.status_code == 404:  # We can't get the original photo for some reason (already deleted?). Try with large
+            skip_update = True  # We don't want to risk overriding the file on Drive in case it's higher-quality
+
+            log.warning("Couldn't get original photo for {}. Trying with large".format(url))
+
+            file_response = self.session.get(url + ':large')
+
+            if file_response.status_code == 404:
+                log.warning("Couldn't get large photo for {}. Trying with normal".format(url))
+
+                file_response = self.session.get(url)
+
+                if file_response.status_code == 404:
+                    failed_to_backup = True
+
+                    log.warning("Couldn't get normal photo for {}".format(url))
+
+        if file_response.status_code != 404:
             file_response.raise_for_status()
-        except HTTPError:
-            if file_response.status_code == 404:  # We can't get the original photo for some reason (already deleted?). Try with large
-                log.warning("Couldn't get original photo for {}. Trying with large".format(url))
-
-                large_url = url + ':large'
-
-                file_response = self.session.get(large_url)
-
-                try:
-                    file_response.raise_for_status()
-                except HTTPError:
-                    if file_response.status_code == 404:
-                        log.warning("Couldn't get large photo for {}. Trying with normal".format(url))
-
-                        file_response = self.session.get(url)
-
-                        try:
-                            file_response.raise_for_status()
-                        except HTTPError:
-                            if file_response.status_code == 404:
-                                log.warning("Couldn't get normal photo for {}".format(url))
-
-                                failed_to_backup = True
-                            else:
-                                raise
-                    else:
-                        raise
-
-                skip_update = True  # We don't want to risk overriding the file on Drive in case it's higher-quality
-            else:
-                raise
 
         if failed_to_backup:
             if not self.force_delete:

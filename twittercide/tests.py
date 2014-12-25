@@ -1,7 +1,13 @@
 from unittest import TestCase
 
+from mock import patch
+
 from .args import parse_args
-from .twittercide import _QUERY_BLACKLIST, _prepare_query
+from .twittercide import Twittercider, _QUERY_BLACKLIST, _prepare_query
+
+
+def _foauth_patcher(*args):
+    return args
 
 
 class TwittercideTest(TestCase):
@@ -124,3 +130,12 @@ class TwittercideTest(TestCase):
         prepared_query = _prepare_query(query)
 
         self.assertEquals(prepared_query, '"id" in parents')
+
+    @patch('twittercide.twittercide.Foauth', _foauth_patcher)
+    def test_prepare_upload(self):
+        twittercider = Twittercider('email', 'password')
+        request = twittercider._prepare_upload('get', 'http://127.0.0.1:8000/', {}, {
+            'file': '',
+        })
+
+        self.assertTrue('multipart/related' in request.headers['Content-Type'])
