@@ -18,14 +18,19 @@ And try again. Still no joy? [Install Python](https://www.python.org/downloads/)
 
 ## About
 
-Twittercide deletes your tweets and backs-up tweeted photos to Google Drive. It saves them to a folder called
-Twittercide. The backed-up photos have the modified date set to when you tweeted them, and the description set as the
-tweet text.
+Twittercide deletes your tweets and backs-up tweeted photos to Google Drive, in a folder called Twittercide. The
+backed-up photos have the modified date set to when you tweeted them, and the description set to the tweet text.
 
 Because of limitations to Twitter's API, Twittercide can only delete your last 3200 tweets (if you're someone like me,
-that's a drop in the ocean compared to how much I've tweeted over the years), but you can use a
+that's a drop in the ocean), but you can use a
 [Twitter archive zip file](https://support.twitter.com/articles/20170160-downloading-your-twitter-archive) with the
 `--archive` option to delete all your tweets, from all time, *forever*.
+
+You can selectively delete tweets as old and older than a few days using the `--older-than` option, and older than a
+specific ID using the `--since-id` option. Easy way to wipe any old, irrelevant tweets.
+
+Don't want to delete tweets? You can use the `--dry-run` to see what tweets would have been deleted, but still back-up
+photos.
 
 Twittercide checks the MD5 checksums of backed-up photos, and it won't delete tweets with photos if it can't back them
 up. You can delete them anyway with the `--force-delete` option. It's also very conservative when it comes to errors.
