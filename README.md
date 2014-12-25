@@ -10,12 +10,6 @@ Delete your tweets and backup tweeted photos to [Google Drive](https://www.googl
 
     pip install git+https://github.com/beaumartinez/twittercide
 
-Didn't work?
-
-    easy_install pip
-
-And try again. Still no joy? [Install Python](https://www.python.org/downloads/) and try again.
-
 ## About
 
 Twittercide deletes your tweets and backs-up tweeted photos to Google Drive, in a folder called Twittercide. The
@@ -86,4 +80,10 @@ I use [Invoke](https://github.com/pyinvoke/invoke), which is the successor to th
 ## Disclaimer
 
 I wrote Twittercide for myself, and although it worked for me, there is a small chance that aliens will abduct you. Use
-at your own risk!
+at your own risk! (I'd add some warning emojis here but Vim's formatting doesn't like them.)
+
+## License
+
+I struggle enough writing code to deal with chosing a license, so I just slapped the good old Do What The Fuck You Want
+Public License on this. [In the words of The Hodgetwins](https://www.youtube.com/watch?v=rWv9fZokqaU), you can do
+whatever the fuck you wanna do.
