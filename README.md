@@ -8,7 +8,7 @@ Delete your tweets and backup tweeted photos to [Google Drive](https://www.googl
 
 ## Installation
 
-    pip install http://github.com/beaumartinez/twittercide/
+    pip install git+https://github.com/beaumartinez/twittercide
 
 Didn't work?
 
