@@ -312,7 +312,7 @@ class Twittercider(object):
         archive = ZipFile(self.archive)
         files = archive.namelist()
 
-        data_files = filter(lambda x: 'data/js' in x, files)
+        data_files = filter(lambda x: 'data/js/tweets' in x, files)
         data_files = sorted(data_files, reverse=True)
 
         since_id_found = False
