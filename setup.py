@@ -21,7 +21,7 @@ setup(
         'requests-foauth>=0.1.1',
         'requests>=2.5.0',
     ],
-    licence='WTFPL',
+    licence='ISC',
     long_description=readme,
     name='twittercide',
     packages=find_packages(),
