@@ -10,11 +10,15 @@ with open('README.md') as readme_file:
 
 setup(
     author='Beau Martinez',
-    author_email='beau@beaumartinez.com',
     classifiers=[
         'Programming Language :: Python :: 2.7',
     ],
     description='Delete your tweets and backup tweeted photos to Google Drive.',
+    entry_points={
+        'console_scripts': [
+            'twittercide = twittercide.__main__:main',
+        ],
+    },
     install_requires=[
         'arrow==0.4.4',
         'python-dateutil>=2.3',
@@ -25,11 +29,6 @@ setup(
     long_description=readme,
     name='twittercide',
     packages=find_packages(),
-    entry_points={
-        'console_scripts': [
-            'twittercide = twittercide.__main__:main',
-        ],
-    },
     url='http://github.com/beaumartinez/twittercide',
     version='0.1',
 )
